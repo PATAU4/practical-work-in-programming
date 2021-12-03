@@ -1,40 +1,84 @@
+
 import socket
-import pickle
-from random import randint
+import threading
+        
 
-def cript(a1, key):
-    a2 = [chr(ord(a1[i]) ^ key) for i in range(len(a1))]
-    return ''.join(a2)
 
-def sen(sock, msg, K):
-    msg = cript(msg, K)
-    sock.send(pickle.dumps(msg))
+def receiving():
+    # Функция получения echo от сервера
+    while True:   
+        try:   
+            data = sock.recv(1024)
+            print(data.decode())
+        except:
+             print('Отключение')
+             break
 
-def rec(sock, K):
-    msg = pickle.loads(sock.recv(1024))
-    msg = cript(msg,K)
-    return msg
 
-HOST = '127.0.0.1'
-PORT = 8080
 
-sock = socket.socket()
-sock.connect((HOST, PORT))
-print('Соединение установлено!')
-print('Введите "exit" для закрытия соеденения')
 
-p, g, a = 7, 5, 3
-p, g, a = [randint(0,250) for i in range(3)]
-A = g ** a % p
-sock.send(pickle.dumps((p, g, A)))
-B = pickle.loads(sock.recv(1024))
-K = B ** a % p
-print('Введите сообщение:')
-msg = input()
-while msg != 'exit':
-    sen(sock,msg, K)
-    print(rec(sock,K))
-    msg = input()
+
+def encrypt(K, data_to_encrypt):
+    global encrypted
+    encrypted=''.join(map(chr, [x + K for x in map(ord, data_to_encrypt)]))
+    print('Зашифрованный вид исходного текста:')
+    print(encrypted)
+    return encrypted
+
+
+    
+def find_step(a, B): # нахождение шага для дешифрования
+    #a = 6   # секретный ключ, объявлено у клиента 
+    s_A = (B**a)%p
+    return s_A
+
+def find_a_to_server(a): # высчитывание ключа, необходимого для нахождения шага для шифрования на сервере
+    A = (g**a)%p 
+    return A
+
+def sending():
+    # Функция передачи data к серверу
+    sock.send(f'client {nickname} joined'.encode())
+    while True:
+        mes = (input())
+        mes = encrypt(K, mes)
+        sock.send(mes.encode())
+        
+        if mes=='exit':
+            sock.close()   
+            break     
+
+
+global p,g
+p = 23 # первое секретное число, о котором знает и клиент и сервер
+g = 5  # второе секретное число, о котором знает и клиент и сервер
+a = 7
+A = find_a_to_server(a)
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+public_k = str(p) + " " + str(g) + ' ' + str(A)
+sock.connect(('localhost', 8087)) 
+sock.send(public_k.encode())
+B = int(sock.recv(1024).decode())
+global K
+K = find_step(a, B)
+print(f"K = {K}")
+
+while True:
+    nickname = input ('Enter your nickname: ')
+    if 1<len(nickname)<20:
+        break
+
+
+
+
+
+t1 = threading.Thread(target=sending, name='sending')
+t2 = threading.Thread(target=receiving, name='receiving')
+
+t1.start()
+t2.start()
+
+t2.join()
 
 
 sock.close()
